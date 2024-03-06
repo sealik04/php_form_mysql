@@ -1,3 +1,92 @@
+<?php
+$connection = mysqli_connect("localhost", "root", "", "formular");
+
+if(isset($_POST["submit"])){
+    $errors = [];
+
+    $requiredFields = ['name', 'surname', 'pass', 'confirm-pass', 'jazyky', 'pohlavi', 'image-upload'];
+    foreach ($requiredFields as $field) {
+        if ($field === 'pohlavi') {
+            if (!isset($_POST[$field])) {
+                $errors[] = "Není vyplněno pohlaví";
+                break;
+            }
+        } elseif ($field === 'image-upload') {
+            if (empty($_FILES[$field]['name'])) {
+                $errors[] = "Není vyplněn obrázek";
+                break;
+            }
+        } elseif ($field === 'jazyky') {
+            if (empty($_POST[$field])) {
+                $errors[] = "Není vyplněn jazyk";
+                break;
+            }
+        } elseif (empty($_POST[$field])) {
+            $errors[] = "Nejsou vyplněna všechna pole";
+            break;
+        }
+    }
+
+    if ($_POST['pass'] !== $_POST['confirm-pass']) {
+        $errors[] = "Heslo a potvrzení hesla se neshodují";
+    }
+
+    if(empty($errors)) {
+        $first_name = $_POST["name"];
+        $last_name = $_POST["surname"];
+        $sex = $_POST["pohlavi"];
+        $language = $_POST["jazyky"];
+        $image_name = $_FILES["image-upload"]["name"];
+        $image_tmp_name = $_FILES["image-upload"]["tmp_name"];
+        $hashed_password = password_hash($_POST["pass"], PASSWORD_DEFAULT);
+
+        //kontrola obrazku
+        $target_dir = "uploads/";
+        $target_file = $target_dir . basename($image_name);
+        $imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
+        $counter = 1;
+
+        $target_dir = "uploads/";
+
+        if (!file_exists($target_dir)) {
+            mkdir($target_dir, 0777, true);
+        }
+
+        while (file_exists($target_file)) {
+            $new_filename = pathinfo($image_name, PATHINFO_FILENAME) . $counter . '.' . $imageFileType;
+            $target_file = $target_dir . $new_filename;
+            $counter++;
+        }
+
+        if (move_uploaded_file($image_tmp_name, $target_file)) {
+            $insert_query = "INSERT INTO data_formular (jmeno, prijmeni, pohlavi, jazyk, image, image_name, heslo) VALUES (?, ?, ?, ?, ?, ?, ?)";
+            $stmt = mysqli_prepare($connection, $insert_query);
+            $image = file_get_contents($target_file);
+            mysqli_stmt_bind_param($stmt, "sssssss", $first_name, $last_name, $sex, $language, $image, $image_name, $hashed_password);
+            $result = mysqli_stmt_execute($stmt);
+
+            if(!$result){
+                echo "chyba při vkladu";
+            } else {
+                echo "úspěšně vloženo";
+            }
+        } else {
+            echo "nepodařilo se nahrát obrázek.";
+        }
+    } else {
+        foreach ($errors as $error) {
+            echo "<p class='error'>$error</p>";
+        }
+    }
+
+    $_POST['name'] = '';
+    $_POST['surname'] = '';
+    $_POST['pass'] = '';
+    $_POST['confirm-pass'] = '';
+}
+?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -67,75 +156,18 @@
 
 </head>
 <body>
-
-<?php
-$connection = mysqli_connect("localhost", "root", "", "formular");
-
-if(isset($_POST["submit"])){
-    $errors = [];
-
-    $requiredFields = ['name', 'surname', 'pass', 'confirm-pass', 'jazyky', 'pohlavi', 'image-upload'];
-    foreach ($requiredFields as $field) {
-        if ($field === 'pohlavi') {
-            if (!isset($_POST[$field])) {
-                $errors[] = "neni vyplneno pohlavi";
-                break;
-            }
-        } elseif ($field === 'image-upload') {
-            if (empty($_FILES[$field]['name'])) {
-                $errors[] = "neni vyplneny obrazek";
-                break;
-            }
-        } elseif ($field === 'jazyky') {
-            if (empty($_POST[$field])) {
-                $errors[] = "neni vyplneny jazyk";
-                break;
-            }
-        } elseif (empty($_POST[$field])) {
-            $errors[] = "nejsou vyplnena vsechna pole";
-            break;
-        }
-    }
-
-    if(empty($errors)) {
-        $first_name = $_POST["name"];
-        $last_name = $_POST["surname"];
-        $sex = $_POST["pohlavi"];
-        $language = $_POST["jazyky"];
-
-        $image = file_get_contents($_FILES['image-upload']['tmp_name']);
-
-        $insert_query = "INSERT INTO data_formular (jmeno, prijmeni, pohlavi, jazyk, image) VALUES (?, ?, ?, ?, ?)";
-        $stmt = mysqli_prepare($connection, $insert_query);
-        mysqli_stmt_bind_param($stmt, "sssss", $first_name, $last_name, $sex, $language, $image);
-        $result = mysqli_stmt_execute($stmt);
-
-        if(!$result){
-            echo "chyba pri vkladu";
-        } else {
-            echo "uspesne vlozene";
-        }
-
-    } else {
-        foreach ($errors as $error) {
-            echo "<p class='error'>$error</p>";
-        }
-    }
-}
-?>
-
 <form action="<?php echo $_SERVER["PHP_SELF"]; ?>" method="post" enctype="multipart/form-data">
     <h2>Ride</h2>
     <input type="image" name="klik" src="richard.png"><br>
 
     <h2>jmeno</h2>
-    <input type="text" name="name" value="<?php echo isset($_POST['name']) ? $_POST['name'] : ''; ?>">
+    <input type="text" name="name" value="<?php echo isset($_POST['name']) ? $_POST['name'] : ''; ?>" autocomplete="off">
     <h2>prijmeni</h2>
-    <input type="text" name="surname" value="<?php echo isset($_POST['surname']) ? $_POST['surname'] : ''; ?>"><br>
+    <input type="text" name="surname" value="<?php echo isset($_POST['surname']) ? $_POST['surname'] : ''; ?>" autocomplete="off"><br>
     <h2>heslo</h2>
-    <input type="password" name="pass" value="<?php echo isset($_POST['pass']) ? $_POST['pass'] : ''; ?>"><br>
+    <input type="password" name="pass" value="<?php echo isset($_POST['pass']) ? $_POST['pass'] : ''; ?>" autocomplete="off"><br>
     <h2>potvrdit heslo</h2>
-    <input type="password" name="confirm-pass" value="<?php echo isset($_POST['confirm-pass']) ? $_POST['confirm-pass'] : ''; ?>"><br>
+    <input type="password" name="confirm-pass" value="<?php echo isset($_POST['confirm-pass']) ? $_POST['confirm-pass'] : ''; ?>" autocomplete="off"><br>
     <h2>pohlavi</h2>
     <input type="radio" name="pohlavi" value="muz">muž<br>
     <input type="radio" name="pohlavi" value="zena">žena<br>
@@ -152,6 +184,3 @@ if(isset($_POST["submit"])){
     <br>
     <input type="submit" name="submit" value="Submit">
 </form>
-
-</body>
-</html>
